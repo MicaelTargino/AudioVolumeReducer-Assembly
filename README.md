@@ -9,7 +9,7 @@ This project is the final submission for the Computer Architecture course at UFP
 
 ## Project Completion Checkpoints
 
-1. **Basic Program Structure**: Create a 32-bit Assembly executable that runs without errors.
+1. ✅ **Basic Program Structure**: Create a 32-bit Assembly executable that runs without errors.
 2. **Input Prompt**: Display prompts on screen for input (file names and volume constant).
 3. **Input Handling**: Receive input from the user for the file names and volume reduction constant.
 4. **File Handling**: Open the input file, read the 44-byte WAV header, and copy it to the output file.
