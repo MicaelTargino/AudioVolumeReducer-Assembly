@@ -7,6 +7,17 @@ This project is the final submission for the Computer Architecture course at UFP
 - Copies the header of the input file to the output file and processes the audio samples.
 - Compatible with both MASM (Windows) and NASM (Linux) in 32-bit mode.
 
+## Project Completion Checkpoints
+
+1. **Basic Program Structure**: Create a 32-bit Assembly executable that runs without errors.
+2. **Input Prompt**: Display prompts on screen for input (file names and volume constant).
+3. **Input Handling**: Receive input from the user for the file names and volume reduction constant.
+4. **File Handling**: Open the input file, read the 44-byte WAV header, and copy it to the output file.
+5. **Audio Data Copy**: Read the audio data (in 16-byte chunks) and write it unaltered to the output file.
+6. **Volume Reduction**: Implement volume reduction by dividing audio samples (2-byte WORD) by the user-defined constant.
+7. **Function Refactoring**: Refactor the volume reduction logic into a separate function, as per the project requirements.
+8. **Code Cleanliness**: Ensure the code is well-commented, organized, and efficient.
+
 ## How It Works
 1. The program prompts the user for:
    - Input file name (WAV format, mono-channel)
