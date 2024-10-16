@@ -9,83 +9,216 @@ includelib \masm32\lib\kernel32.lib
 includelib \masm32\lib\masm32.lib
 
 .data        
-    welcome_string db "Seja bem vindo ao projeto de reducao de volume. Siga os passos abaixo:  ", 0Dh, 0Ah, 0 ; String para iniciar a execução
-    string_request_input_file_name db "Digite o nome do arquivo de entrada: ", 0  ; String para solicitar o nome do arquivo de entrada.
-    string_request_output_file_name db  "Digite o nome do arquivo de saida: ", 0   ; String para solicitar o nome do arquivo de saída.
-    string_request_volume_reduction db "Digite a constante de reducao (1 a 10): ", 0 ; String para solicitar a constante de redução de volume.
+    welcome_string db "Seja bem vindo ao projeto de reducao de volume. Siga os passos abaixo:  ", 0Dh, 0Ah, 0 ; String de boas-vindas.
+    string_request_input_file_name db "Digite o nome do arquivo de entrada: ", 0  ; Solicitaï¿½ï¿½o do arquivo de entrada.
+    string_request_output_file_name db  "Digite o nome do arquivo de saida: ", 0  ; Solicitaï¿½ï¿½o do arquivo de saï¿½da.
+    string_request_volume_reduction db "Digite a constante de reducao (1 a 10): ", 0 ; Solicitaï¿½ï¿½o da constante de reduï¿½ï¿½o de volume.
+    string_request_continue db 0Dh, 0Ah, "Deseja reduzir o volume de outro arquivo? (sim/nao): ", 0 ; Pergunta para continuar ou finalizar.
+    string_thanks db 0Dh, 0Ah, "Obrigado por utilizar o programa. Ate mais!", 0  ; Agradecimento ao usuï¿½rio.
+
+    yes_string db "sim", 0                  ; Resposta positiva para continuar.
+    no_string db "nao", 0                   ; Resposta negativa para encerrar.
     
-    input_file_name db 50 dup(0)           ; Buffer para o nome do arquivo de entrada.
-    output_file_name db 50 dup(0)          ; Buffer para o nome do arquivo de saída.
-    volume_reduction_string db 50 dup(0)   ; Buffer para a string da constante de redução de volume.
-    volume_reduction_constant dd 0         ; Constante de redução de volume.
+    input_file_name db 50 dup(0)            ; Nome do arquivo de entrada.
+    output_file_name db 50 dup(0)           ; Nome do arquivo de saï¿½da.
+    volume_reduction_string db 50 dup(0)    ; Constante de reduï¿½ï¿½o como string.
+    continue_string db 50 dup(0)            ; String para armazenar a resposta se quer continuar.
+    volume_reduction_constant dd 0          ; Constante de reduï¿½ï¿½o (DWORD).
     
-    input_handle dd 0                     ; Handle do console de entrada.
-    output_handle dd 0                    ; Handle do console de saída.
-    console_count dd 0                    ; Contador de caracteres lidos/escritos do console.
+    input_handle dd 0                       ; Handle do console de entrada.
+    output_handle dd 0                      ; Handle do console de saï¿½da.
+    console_count dd 0                      ; Contador de caracteres lidos/escritos do console.
     
-    input_file_name_length dd 0             ; Tamanho da string do nome do arquivo de entrada.
-    output_file_name_length dd 0            ; Tamanho da string do nome do arquivo de saída.
-    volume_reduction_string_length dd 0 ; Tamanho da string da constante de redução de volume
+    input_file_name_length dd 0             ; Tamanho do nome do arquivo de entrada.
+    output_file_name_length dd 0            ; Tamanho do nome do arquivo de saï¿½da.
+    volume_reduction_string_length dd 0     ; Tamanho da string de reduï¿½ï¿½o de volume.
+
+    input_file_handle dd 0                  ; Handle do arquivo de entrada.
+    output_file_handle dd 0                 ; Handle do arquivo de saï¿½da.
+    buffer db 44 dup(0)                     ; Buffer para armazenar o cabeï¿½alho do arquivo WAV.
+    bytes_read dd 0                         ; Nï¿½mero de bytes lidos.
+    bytes_written dd 0                      ; Nï¿½mero de bytes escritos.
 
 
-.code                             
+    mov esi, eax            
+    shr ecx, 1              ; Cada amostra tem 2 bytes (16 bits), portanto divide por 2
+
+process_samples:
+    ; Carrega uma amostra de 16 bits (2 bytes)
+    movsx eax, word ptr [esi]   ; Move os 2 bytes para EAX como um nï¿½mero de 16 bits com sinal
+    cdq                         ; Extende edx:eax para divisï¿½o correta
+    idiv dword ptr [volume_reduction_constant] ; Divide eax pela constante de reduï¿½ï¿½o
+
+    ; Clipa o valor para o intervalo de 16 bits com sinal (-32768 a 32767)
+    cmp eax, 32767
+    jle check_min_value
+    mov eax, 32767
+
+check_min_value:
+    cmp eax, -32768
+    jge store_sample
+    mov eax, -32768
+
+store_sample:
+    ; Armazena o valor processado de volta no buffer
+    mov [esi], ax               
+    add esi, 2                  ; Avanï¿½a para a prï¿½xima amostra de 2 bytes
+    loop process_samples        
+
+    mov esp, ebp                ; Restaura a pilha
+    pop ebp                     ; Restaura o valor anterior de EBP
+    ret                         ; Retorna para a funï¿½ï¿½o chamadora
+
 start:
-    ; Obtém o handle de entrada do console (teclado) usando a função API GetStdHandle.
+    ; Loop principal para processar mï¿½ltiplos arquivos
+main_loop:
+    ; Obtï¿½m o handle de entrada do console (teclado)
     invoke GetStdHandle, STD_INPUT_HANDLE
-    mov input_handle, eax        ; Armazena o handle de entrada na variável inputHandle.
+    mov input_handle, eax        ; Armazena o handle de entrada.
 
-    ; Obtém o handle de saída do console (tela) usando a função API GetStdHandle.
+    ; Obtï¿½m o handle de saï¿½da do console (tela)
     invoke GetStdHandle, STD_OUTPUT_HANDLE
-    mov output_handle, eax       ; Armazena o handle de saída na variável outputHandle.
+    mov output_handle, eax       ; Armazena o handle de saï¿½da.
 
-    ; Imprime na tela a mensagem inicial para o usuário
+    ; Imprime a mensagem de boas-vindas
     invoke WriteConsole, output_handle, addr welcome_string, sizeof welcome_string, addr console_count, NULL
     
-    ; Imprime na tela a mensagem para o usuário digitar o nome do arquivo de entrada
-    invoke WriteConsole, output_handle, addr string_request_input_file_name , sizeof string_request_input_file_name, addr console_count, NULL
-    
-    ; Lê o nome do arquivo de entrada digitado pelo usuário e calcula o tamanho da string
+    ; Solicita o nome do arquivo de entrada
+    invoke WriteConsole, output_handle, addr string_request_input_file_name, sizeof string_request_input_file_name, addr console_count, NULL
     invoke ReadConsole, input_handle, addr input_file_name, sizeof input_file_name, addr console_count, NULL
-    invoke StrLen, addr input_file_name
-    mov input_file_name_length, eax
+    ; Remove newline e carriage return do nome do arquivo de entrada
+    mov esi, offset input_file_name
+input_next:
+    mov al, [esi]
+    inc esi
+    cmp al, 13               ; Verifica se ï¿½ carriage return (\r)
+    je input_terminate
+    cmp al, 10               ; Verifica se ï¿½ newline (\n)
+    je input_terminate
+    cmp al, 0                ; Se for null terminator, termina
+    je input_terminate
+    jmp input_next
+input_terminate:
+    dec esi
+    mov byte ptr [esi], 0    ; Define o null terminator
 
-    ; Imprime na tela a mensagem para o usuário digitar o nome do arquivo de saída
-    invoke WriteConsole, output_handle, addr string_request_output_file_name , sizeof string_request_output_file_name, addr console_count, NULL
-    
-    ; Lê o nome do arquivo de saída digitado pelo usuário e calcula o tamanho da string
+    ; Solicita o nome do arquivo de saï¿½da
+    invoke WriteConsole, output_handle, addr string_request_output_file_name, sizeof string_request_output_file_name, addr console_count, NULL
     invoke ReadConsole, input_handle, addr output_file_name, sizeof output_file_name, addr console_count, NULL
-    invoke StrLen, addr output_file_name
-    mov output_file_name_length, eax
+    ; Remove newline e carriage return do nome do arquivo de saï¿½da
+    mov esi, offset output_file_name
+output_next:
+    mov al, [esi]
+    inc esi
+    cmp al, 13               
+    je output_terminate
+    cmp al, 10               
+    je output_terminate
+    cmp al, 0                
+    je output_terminate
+    jmp output_next
+output_terminate:
+    dec esi
+    mov byte ptr [esi], 0    ; Define o null terminator
 
-    ; Imprime na tela a mensagem para o usuário digitar a constante de redução do volume
-    invoke WriteConsole, output_handle, addr string_request_volume_reduction , sizeof string_request_volume_reduction, addr console_count, NULL
-    ; Lê a string digitada e calcula o tamanho da string
+    ; Solicita a constante de reduï¿½ï¿½o do volume
+    invoke WriteConsole, output_handle, addr string_request_volume_reduction, sizeof string_request_volume_reduction, addr console_count, NULL
     invoke ReadConsole, input_handle, addr volume_reduction_string, sizeof volume_reduction_string, addr console_count, NULL
-    invoke StrLen, addr volume_reduction_string
-    mov volume_reduction_string_length, eax
-
-    
-    ; Antes de realizar a conversão da constante lida para DWORD, vamos limpar o "carriage return" da string inserida.
-    mov esi, offset volume_reduction_string  ; Load the address of the input string into ESI register.
-
+    ; Remove o carriage return
+    mov esi, offset volume_reduction_string  
 proximo:
-    mov al, [esi]                ; Carrega o byte atual (caractere) da string lida.
-    inc esi                      ; Move para o próximo caractere
-    cmp al, 13                   ; Compara o caractere com o carriage return (ASCII 13).
-    jne proximo                  ; Se não for o carriage return, continua o loop.
-    dec esi                      ; Caso seja, volta um passo (Apontar para o último caractere válido).
-    xor al, al                   ; Zera o registrador AL (usado para marcar o final da string).
-    mov [esi], al                ; Define o null terminator (`0x00`) no final da string.
+    mov al, [esi]
+    inc esi
+    cmp al, 13
+    jne proximo
+    dec esi
+    xor al, al
+    mov [esi], al                ; Define o null terminator
 
-    ; Converte a string  para DWORD usando atodw (função auxiliar do MASM32).
+    ; Converte a constante de reduï¿½ï¿½o para DWORD
     invoke atodw, offset volume_reduction_string
-    MOV dword ptr [volume_reduction_constant], eax   ; Salva o número convertido na variável "volume_reduction_constant"
+    mov dword ptr [volume_reduction_constant], eax
 
+    ; Abrindo o arquivo de entrada (.wav)
+    invoke CreateFile, addr input_file_name, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+    mov input_file_handle, eax
+    cmp input_file_handle, INVALID_HANDLE_VALUE
+    je fim ; Verifica se ocorreu um erro ao abrir o arquivo de entrada
 
-    ; Imprime os valores digitados pelo usuário (remover esta parte depois)
-    invoke WriteConsole, output_handle, addr input_file_name, sizeof input_file_name, addr console_count, NULL
-    invoke WriteConsole, output_handle, addr output_file_name, sizeof output_file_name, addr console_count, NULL
-    invoke WriteConsole, output_handle, addr volume_reduction_string, sizeof volume_reduction_string, addr console_count, NULL
+    ; Abrindo o arquivo de saï¿½da (.wav)
+    invoke CreateFile, addr output_file_name, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL
+    mov output_file_handle, eax
+    cmp output_file_handle, INVALID_HANDLE_VALUE
+    je fim ; Verifica se ocorreu um erro ao criar o arquivo de saï¿½da
 
-    invoke ExitProcess, 0          
-end start                      
+    ; Lendo os primeiros 44 bytes do arquivo de entrada (cabeï¿½alho .wav)
+    invoke ReadFile, input_file_handle, addr buffer, 44, addr bytes_read, NULL
+    cmp eax, 0
+    je fim ; Verifica se ocorreu um erro ao ler o arquivo de entrada
+    cmp bytes_read, 44
+    jne fim ; Verifica se foram lidos exatamente 44 bytes
+
+    ; Escrevendo o cabeï¿½alho no arquivo de saï¿½da
+    invoke WriteFile, output_file_handle, addr buffer, 44, addr bytes_written, NULL
+    cmp eax, 0
+    je fim ; Verifica se ocorreu um erro ao escrever no arquivo de saï¿½da
+    cmp bytes_written, 44
+    jne fim ; Verifica se foram escritos exatamente 44 bytes
+
+next_chunk:
+    ; Lendo 16 bytes do arquivo de entrada
+    invoke ReadFile, input_file_handle, addr buffer, 16, addr bytes_read, NULL
+    cmp eax, 0                ; Verifica se houve erro ao ler
+    je fim                    ; Se houve erro, finaliza
+    cmp bytes_read, 0         ; Verifica se atingiu o final do arquivo
+    je fim                    ; Se bytes lidos = 0, fim do arquivo
+
+    ; Chamando a funï¿½ï¿½o ProcessBuffer para processar o buffer lido
+    push bytes_read           ; Passando o segundo parï¿½metro (nï¿½mero de bytes lidos)
+    push offset buffer        ; Passando o primeiro parï¿½metro (endereï¿½o do buffer)
+    call ProcessBuffer        ; Chamando a funï¿½ï¿½o para processar o buffer
+    add esp, 8                ; Limpando os parï¿½metros da pilha
+
+    ; Escrevendo os bytes processados no arquivo de saï¿½da
+    invoke WriteFile, output_file_handle, addr buffer, bytes_read, addr bytes_written, NULL
+    cmp eax, 0                ; Verifica se houve erro ao escrever
+    je fim                    ; Se houve erro, finaliza
+
+    ; Continua o loop de leitura e escrita
+    jmp next_chunk
+
+fim:
+    ; Fechando os arquivos
+    invoke CloseHandle, input_file_handle
+    invoke CloseHandle, output_file_handle
+
+    ; Pergunta ao usuï¿½rio se deseja processar outro arquivo
+    invoke WriteConsole, output_handle, addr string_request_continue, sizeof string_request_continue, addr console_count, NULL
+    invoke ReadConsole, input_handle, addr continue_string, sizeof continue_string, addr console_count, NULL
+    ; Remove newline e carriage return da resposta
+    mov esi, offset continue_string
+continue_next:
+    mov al, [esi]
+    inc esi
+    cmp al, 13               ; Verifica se ï¿½ carriage return (\r)
+    je continue_terminate
+    cmp al, 10               ; Verifica se ï¿½ newline (\n)
+    je continue_terminate
+    cmp al, 0                ; Se for null terminator, termina
+    je continue_terminate
+    jmp continue_next
+continue_terminate:
+    dec esi
+    mov byte ptr [esi], 0    ; Define o null terminator
+
+    ; Verifica se o usuï¿½rio quer continuar ou nï¿½o
+    invoke lstrcmpi, addr continue_string, addr yes_string ; Compara com "sim"
+    cmp eax, 0               ; Se for igual a "sim", retorna 0
+    je main_loop             ; Se o usuï¿½rio digitou "sim", repete o processo
+
+    ; Agradecimento final
+    invoke WriteConsole, output_handle, addr string_thanks, sizeof string_thanks, addr console_count, NULL
+
+    invoke ExitProcess, 0    ; Finaliza o programa
+
+end start
